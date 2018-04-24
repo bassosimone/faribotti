@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Takes on stdin list of gs files and writes on stdout by UUID stats.
 
 import datetime
 import gzip
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 
+logging.getLogger().setLevel(logging.INFO)
 DATABASE = {}
 
 def process_entry(entry):
@@ -43,6 +45,7 @@ for line in sys.stdin:
     gsurl = line.strip()
     assert gsurl.startswith("gs://archive-mlab-oti/neubot/")
     assert gsurl.endswith(".tgz")
+    logging.info("Processing: %s" % gsurl)
     result = subprocess.run(["gsutil", "cat", gsurl], stdout=subprocess.PIPE)
     if result.returncode != 0:
         logging.warning("gsutil failed; continuing with next entry")
@@ -67,4 +70,5 @@ for line in sys.stdin:
     except:
         logging.warning("Cannot process tarfile", exc_info=True)
         continue
-#print(DATABASE)
+
+json.dump(DATABASE, sys.stdout)
