@@ -1,0 +1,3 @@
+#!/bin/sh
+set -ex
+gsutil ls -r gs://archive-mlab-oti/neubot | grep '\.tgz$' | tee data/index.txt
