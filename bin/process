@@ -9,9 +9,13 @@ import logging
 import subprocess
 import sys
 import tarfile
+import time
 
 logging.getLogger().setLevel(logging.INFO)
 DATABASE = {}
+TIME_SNAP = time.time()
+SECONDS_IN_MINUTE = 60
+TIME_THRESHOLD = 15 * SECONDS_IN_MINUTE
 
 def process_entry(entry):
     if "client" in entry:
@@ -42,6 +46,15 @@ def process_entry(entry):
     })
 
 for line in sys.stdin:
+    now = time.time()
+    if now - TIME_SNAP > TIME_THRESHOLD:
+        try:
+            with open("data/snap-%s.json" % now, "w") as filep:
+                json.dump(DATABASE, filep)
+        except:
+            logging.warning("Cannot write snap", exc_info=True)
+        TIME_SNAP = now
+
     gsurl = line.strip()
     assert gsurl.startswith("gs://archive-mlab-oti/neubot/")
     assert gsurl.endswith(".tgz")
