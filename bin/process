@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+
+import datetime
+import gzip
+import io
+import json
+import logging
+import subprocess
+import sys
+import tarfile
+
+DATABASE = {}
+
+def process_entry(entry):
+    if "client" in entry:
+        if isinstance(entry["client"], list):
+            # DASH
+            if len(entry["client"]) < 1:
+                return
+            uuid_value = entry["client"][0]["uuid"]
+            real_address_value = entry["client"][0]["real_address"]
+            timestamp_value = entry["srvr_timestamp"]
+        else:
+            # assume RAW
+            uuid_value = entry["client"]["uuid"]
+            real_address_value = entry["server"]["peername"]
+            timestamp_value = entry["server"]["timestamp"]
+    else:
+        # assume BitTorrent or speedtest
+        uuid_value = entry["uuid"]
+        real_address_value = entry["real_address"]
+        timestamp_value = entry["timestamp"]
+    DATABASE.setdefault(uuid_value, [])
+    DATABASE[uuid_value].append({
+        "address": real_address_value,
+        "datetime": datetime.datetime.fromtimestamp(
+            timestamp_value).strftime("%Y%m%d%H%M%SZ"),
+        "timestamp": timestamp_value,
+        "uuid": uuid_value,
+    })
+
+for line in sys.stdin:
+    gsurl = line.strip()
+    assert gsurl.startswith("gs://archive-mlab-oti/neubot/")
+    assert gsurl.endswith(".tgz")
+    result = subprocess.run(["gsutil", "cat", gsurl], stdout=subprocess.PIPE)
+    if result.returncode != 0:
+        logging.warning("gsutil failed; continuing with next entry")
+        continue
+    try:
+        tar = tarfile.open(fileobj=io.BytesIO(result.stdout))
+        for member in tar.getmembers():
+            entry = None
+            try:
+                compressed = tar.extractfile(member).read()
+                uncompressed = gzip.decompress(compressed)
+                entry = json.loads(uncompressed)
+            except:
+                logging.warning("Cannot load entry", exc_info=True)
+                continue
+            try:
+                process_entry(entry)
+            except:
+                logging.warning("Cannot process entry", exc_info=True)
+                logging.warning("Offending entry: %s" % entry)
+                continue
+    except:
+        logging.warning("Cannot process tarfile", exc_info=True)
+        continue
+#print(DATABASE)
