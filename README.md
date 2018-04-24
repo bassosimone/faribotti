@@ -1,5 +1,10 @@
 # Processing Neubot data from M-Lab
 
+> Boom
+
+(`Far-i-botti` can be translated as "making the firecrackers" - maybe. This is
+just a temporary name until I figure out what to do with this repo.)
+
 ## Install, configure, and use gsutil for archive-mlab-oti bucket
 
 ```
@@ -32,3 +37,16 @@ the Internet please see the instructions in that file.gsutil config
 $ gsutil ls -r gs://archive-mlab-oti/neubot/2018
 ```
 
+## List all the data in the public OTI bucket
+
+```
+./bin/ls > data/index.txt
+```
+
+## Process all the data in index.txt
+
+```
+cat data/index.txt | ./bin/process > data/database.json
+```
+
+(Very slow. Grows quite a bit in memory. Bleah. Saves snapshots.)
