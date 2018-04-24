@@ -1,3 +1,4 @@
 #!/bin/sh
+# Lists all files in the new bucket
 set -ex
 gsutil ls -r gs://archive-mlab-oti/neubot | grep '\.tgz$' | tee data/index.txt
