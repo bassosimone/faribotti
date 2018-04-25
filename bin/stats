@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+
+import itertools
+import json
+import sys
+import time
+
+import geoip2.database
+
+def print_data_sample(data):
+    uuid, info = list(itertools.islice(data.items(), 1))[0]
+    print("Data sample:", uuid, "=>", json.dumps(info))
+
+# Step 1: Load the snapshot
+
+def load_snapshot():
+    source_filename = "WORKING-SNAP.json"
+    if len(sys.argv) > 1:
+        source_filename = sys.argv[1]
+    with open(source_filename, "rb") as filep:
+        return json.load(filep)
+
+SNAP_DATA = load_snapshot()
+print("Original number of UUIDs:", len(SNAP_DATA))
+print_data_sample(SNAP_DATA)
+
+# Step 2: Get rid of UUIDs with clearly invalid time. Limitation: we are
+# assuming that, if a single measurement has a bad clock, then we are not
+# interested into all the measurements of an UUID. It may be gross.
+
+def narrow_time_window(data):
+    begin_time = time.mktime(time.strptime("20170101", "%Y%m%d"))
+    end_time = time.mktime(time.strptime("20181231", "%Y%m%d"))
+    weird_uuids = set()
+    for uuid, info in data.items():
+        for entry in info:
+            timestamp = entry["timestamp"]
+            if timestamp < begin_time or timestamp > end_time:
+                weird_uuids.add(uuid)
+                break
+    for uuid in weird_uuids:
+        del data[uuid]
+
+narrow_time_window(SNAP_DATA)
+print("Number of UUIDs with reasonable clock:", len(SNAP_DATA))
+
+# Step 3: narrow the ASN window. All the UUIDs for which we either do not know
+# the ASN or that are bound to more than one ASN are discarded. This is gross
+# especially because I am using the _current_ GeoIP2 ASN database.
+
+def narrow_asn_window(data):
+    geolite2_path = "GeoLite2-ASN_20180424/GeoLite2-ASN.mmdb"
+    with geoip2.database.Reader(geolite2_path) as mmdb:
+        weird_uuids = set()
+        for uuid, info in data.items():
+            asns = set()
+            for entry in info:
+                try:
+                    asn = mmdb.asn(entry["address"]).autonomous_system_number
+                except geoip2.errors.AddressNotFoundError:
+                    weird_uuids.add(uuid)
+                    break # at least one unknown UUID (IPv6?): bail
+                else:
+                    asns.add(asn)
+                    if len(asns) > 1:
+                        weird_uuids.add(uuid)
+                        break # more than one ASN: bail
+        for uuid in weird_uuids:
+            del data[uuid]
+
+narrow_asn_window(SNAP_DATA)
+print("Number of UUIDs with known and unique ASN:", len(SNAP_DATA))
+
+# Step 4: reorganize data so to have a mapping between unique UUID and
+# unique IP addresses thereby discarding timing info.
+
+def reorganize(data):
+    for uuid in data.keys():
+        unique_ips = set()
+        for info in data[uuid]:
+            unique_ips.add(info["address"])
+        data[uuid] = list(unique_ips)
+
+reorganize(SNAP_DATA)
+print_data_sample(SNAP_DATA)
+
+# Step 5: Make the final histogram.
+
+def make_histo(data):
+    histo = {}
+    for _, ips in data.items():
+        histo.setdefault(len(ips), 0)
+        histo[len(ips)] += 1
+    return histo
+
+HISTO = make_histo(SNAP_DATA)
+for IPS in sorted(HISTO.keys()):
+    print(IPS, HISTO[IPS])
