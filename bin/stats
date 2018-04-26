@@ -29,8 +29,9 @@ print_data_sample(SNAP_DATA)
 # interested into all the measurements of an UUID. It may be gross.
 
 def narrow_time_window(data):
-    begin_time = time.mktime(time.strptime("20170101", "%Y%m%d"))
+    begin_time = time.mktime(time.strptime("20170603", "%Y%m%d"))
     end_time = time.mktime(time.strptime("20181231", "%Y%m%d"))
+    min_time, max_time = end_time, begin_time
     weird_uuids = set()
     for uuid, info in data.items():
         for entry in info:
@@ -38,8 +39,12 @@ def narrow_time_window(data):
             if timestamp < begin_time or timestamp > end_time:
                 weird_uuids.add(uuid)
                 break
+            min_time = min(timestamp, min_time)
+            max_time = max(timestamp, max_time)
     for uuid in weird_uuids:
         del data[uuid]
+    print("Minimum sane time (as CTIME): ", time.ctime(min_time))
+    print("Maximum sane time (as CTIME): ", time.ctime(max_time))
 
 narrow_time_window(SNAP_DATA)
 print("Number of UUIDs with reasonable clock:", len(SNAP_DATA))
